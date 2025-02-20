@@ -9,22 +9,17 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 import os
 import json
-from datetime import datetime
 from typing import Dict, List, Optional, TypedDict, Annotated, Union, Literal, Annotated
-import re
 from dotenv import load_dotenv
 from apify import Actor
 from pydantic import BaseModel, Field
 
 load_dotenv()
 
-
 class Settings(BaseModel):
     openai_api_key: Annotated[str, Field(alias="OPENAI_API_KEY")]
 
-
 settings = Settings.model_validate(os.environ)
-
 
 # Type definitions
 class RestaurantQuery(TypedDict):
@@ -32,7 +27,6 @@ class RestaurantQuery(TypedDict):
     restaurant_name: Optional[str]
     date: Optional[str]
     cuisine_type: Optional[str]
-
 
 class RestaurantData(TypedDict):
     name: str
@@ -50,7 +44,6 @@ class RestaurantData(TypedDict):
     price_level: Optional[str]
     cuisine: List[str]
 
-
 class AgentState(TypedDict):
     query: Annotated[RestaurantQuery, lambda _, new: new]
     restaurants: Annotated[list[RestaurantData], lambda _, new: new]
@@ -59,7 +52,6 @@ class AgentState(TypedDict):
     error: Annotated[Optional[str], lambda _, new: new]
     final_response: Annotated[Optional[str], lambda _, new: new]
 
-
 # APIFY actors
 GOOGLE_MAPS_SCRAPER = "compass/crawler-google-places"
 WCC = "apify/website-content-crawler"
@@ -67,30 +59,28 @@ WCC = "apify/website-content-crawler"
 # LLM setup
 llm = ChatOpenAI(model="gpt-4", temperature=0, api_key=settings.openai_api_key)
 
-
 # State transformation functions
 async def parse_user_query(state: AgentState) -> AgentState:
     """Parse the user query to extract location, restaurant name, date, etc."""
-    print("parse_user_query")
+    print("Parsing user query")
     user_message = state["query"].get("user_input", "")
 
-    system_prompt = """
-    Extract the following information from the user query:
-    1. Location (city, neighborhood, address) - add country name
-    2. Restaurant name (if specified)
-    3. Date (if specified)
-    4. Cuisine type (if specified)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """
+        Extract the following information from the user query:
+        1. Location (city, neighborhood, address) - add country name
+        2. Restaurant name (if specified)
+        3. Date (if specified)
+        4. Cuisine type (if specified)
+        
+        Format your response as JSON with keys: location, restaurant_name, date, cuisine_type.
+        If information is not provided, use null for that field.
+        """),
+        ("human", "{user_input}")
+    ])
     
-    Format your response as JSON with keys: location, restaurant_name, date, cuisine_type.
-    If information is not provided, use null for that field.
-    """
-
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_message),
-    ]
-
-    response = await llm.ainvoke(messages)
+    formatted_prompt = prompt.invoke({"user_input": user_message})
+    response = await llm.ainvoke(formatted_prompt.to_messages())
     parsed_query = json.loads(response.content)
 
     # Create a new query object that preserves the original user_input
@@ -103,7 +93,7 @@ async def parse_user_query(state: AgentState) -> AgentState:
 
 async def search_google_maps(state: AgentState) -> AgentState:
     """Use APIFY Google Maps Scraper to find restaurants, with caching for debugging."""
-    print("search_google_maps")
+    print("Searching Google Maps")
     try:
         location = state["query"]["location"]
         restaurant_name = state["query"].get("restaurant_name")
@@ -141,17 +131,13 @@ async def search_google_maps(state: AgentState) -> AgentState:
             }
             restaurants.append(rest_data)
 
-        # Save results to cache
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(restaurants, f, indent=2, ensure_ascii=False)
-
         return {**state, "restaurants": restaurants, "current_step": "google_maps_completed"}
 
     except Exception as e:
         return {**state, "error": f"Error in Google Maps search: {str(e)}", "current_step": "error"}
 
 async def crawl_websites(state: AgentState) -> AgentState:
-    print("crawl_websites")
+    print("Website crawling")
     """Use website content crawler to fetch information about the restaurant from their website."""
     try:
         if not state.get("top_matches"):
@@ -208,10 +194,9 @@ async def crawl_websites(state: AgentState) -> AgentState:
             "current_step": "error",
         }
 
-
 async def analyze_and_summarize(state: AgentState) -> AgentState:
     """Use LLM to analyze and summarize the restaurant data."""
-    print("analyze_and_summarize")
+    print("Analysing and summarizing")
     try:
         if not state.get("restaurants"):
             return {
@@ -221,28 +206,29 @@ async def analyze_and_summarize(state: AgentState) -> AgentState:
             }
 
         analyzed_restaurants = []
-
-        for restaurant in state["restaurants"]:
-            # Prepare the restaurant data for the LLM
-            restaurant_info = restaurant.get("top_positive_reviews")
-            restaurant_info += restaurant.get("top_negative_reviews")
-
-            system_prompt = """
+        
+        analysis_prompt = ChatPromptTemplate.from_messages([
+            ("system", """
             Analyze the restaurant data provided and create a comprehensive summary that includes:
             1. Key themes from positive reviews
             2. Key themes from negative reviews
         
-            Focus on being objective and data-driven in your analysis, make it relatively consise. Don't complain about not having much data. Answer straight to the point.
-            """
+            Focus on being objective and data-driven in your analysis, make it relatively consise. 
+            Don't complain about not having much data. Answer straight to the point.
+            """),
+            ("human", "Restaurant data:\n{restaurant_info}")
+        ])
 
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=f"Restaurant data:\n{restaurant_info}"),
-            ]
+        for restaurant in state["restaurants"]:
+            # Prepare the restaurant data for the LLM
+            restaurant_info = restaurant.get("top_positive_reviews", [])
+            restaurant_info += restaurant.get("top_negative_reviews", [])
+            
+            # Format the prompt with this restaurant's data
+            formatted_prompt = analysis_prompt.invoke({"restaurant_info": restaurant_info})
+            response = await llm.ainvoke(formatted_prompt.to_messages())
 
-            response = await llm.ainvoke(messages)
-
-            # Add the analysis to the restaurant data
+            # Add the analysis
             restaurant["review_analysis"] = response.content
             analyzed_restaurants.append(restaurant)
 
@@ -260,7 +246,7 @@ async def analyze_and_summarize(state: AgentState) -> AgentState:
         }
 
 async def pick_top_restaurants(state: AgentState) -> AgentState:
-    print("pick_top_restaurants")
+    print("Selecting top restaurants")
     try:
         data = [
             {
@@ -274,18 +260,25 @@ async def pick_top_restaurants(state: AgentState) -> AgentState:
             } for index, item in enumerate(state["restaurants"])
         ]
         
-        prompt = f"""
-        Pick up to three restaurants that best match the user criteria. If the criteria are too vague, pick the restaurants with the best quality overall.
-        The result should be a JSON list of numbers that contains the `restaurant_index` values of the selected restaurants with no extra characters around it.
+        prompt = ChatPromptTemplate.from_messages([
+            ("human", """
+            Pick up to three restaurants that best match the user criteria. If the criteria are too vague, pick the restaurants with the best quality overall.
+            The result should be a JSON list of numbers that contains the `restaurant_index` values of the selected restaurants with no extra characters around it.
+            
+            User criteria: 
+            {user_criteria}
+            
+            Restaurant data: 
+            {restaurant_data}
+            """)
+        ])
         
-        User criteria: 
-        {json.dumps(state["query"], indent=2, ensure_ascii=False)}
+        formatted_prompt = prompt.invoke({
+            "user_criteria": json.dumps(state["query"], indent=2, ensure_ascii=False),
+            "restaurant_data": json.dumps(data, indent=2, ensure_ascii=False)
+        })
         
-        Restaurant data: 
-        {json.dumps(data, indent=2, ensure_ascii=False)}
-        """
-
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        response = await llm.ainvoke(formatted_prompt.to_messages())
         top_matches = [state["restaurants"][index] for index in json.loads(response.content)]
         
         return {**state, "top_matches": top_matches, "current_step": "pick_top_restaurants_done"}
@@ -298,7 +291,7 @@ async def pick_top_restaurants(state: AgentState) -> AgentState:
 
 async def format_final_response(state: AgentState) -> AgentState:
     """Format the final response to the user with concise review summaries and menu highlights."""
-    print("format_final_response")
+    print("Formatting final response")
     if state.get("error"):
         return state
 
@@ -329,40 +322,49 @@ async def format_final_response(state: AgentState) -> AgentState:
             }
             restaurant_summaries.append(summary)
 
-        prompt = f"""
-        You are an assistant that generates structured JSON responses.
+        response_prompt = ChatPromptTemplate.from_messages([
+            ("human", """
+            You are an assistant that generates structured JSON responses.
 
-        Summarize the top restaurant options for {query.get("location", "the requested location")}.
+            Summarize the top restaurant options for {location}.
 
-        Your response must be a JSON object with the following structure:
-        {{
-            "restaurants": [
-                {{
-                    "name": "Restaurant Name",
-                    "address": "Restaurant Address",
-                    "location": "Restaurant Longtitude and Latitude",
-                    "rating": "4.5",
-                    "price_level": "$$",
-                    "cuisine": ["Cuisine1", "Cuisine2"],
-                    "map_url": "Google Maps Link",
-                    "menu_url": "Menu Link",
-                    "web_url": "Website Link",
-                    "review_summary": "Brief review summary",
-                    "menu_highlights": "Key menu items if available"
-                }}
-            ],
-            "notes": "Mention reservation recommendations if a date is provided: {query.get('date')}. 
-                    Prioritize restaurants matching cuisine type: {query.get('cuisine_type')}."
-                    If the cuisine type in the input Restaurant data is too vague, adjust it in the output to fit the name and the reviews.
-        }}
+            Your response must be a JSON object with the following structure:
+            {{
+                "restaurants": [
+                    {{
+                        "name": "Restaurant Name",
+                        "address": "Restaurant Address",
+                        "location": "Restaurant Longtitude and Latitude",
+                        "rating": "4.5",
+                        "price_level": "$$",
+                        "cuisine": ["Cuisine1", "Cuisine2"],
+                        "map_url": "Google Maps Link",
+                        "menu_url": "Menu Link",
+                        "web_url": "Website Link",
+                        "review_summary": "Brief review summary",
+                        "menu_highlights": "Key menu items if available"
+                    }}
+                ],
+                "notes": "Mention reservation recommendations if a date is provided: {date}. 
+                        Prioritize restaurants matching cuisine type: {cuisine_type}."
+                        If the cuisine type in the input Restaurant data is too vague, adjust it in the output to fit the name and the reviews.
+            }}
 
-        DO NOT return additional text, only a valid JSON response.
+            DO NOT return additional text, only a valid JSON response.
 
-        Restaurant data:
-        {json.dumps(restaurant_summaries, indent=2, ensure_ascii=False)}
-        """
-
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+            Restaurant data:
+            {restaurant_data}
+            """)
+        ])
+        
+        formatted_prompt = response_prompt.invoke({
+            "location": query.get("location", "the requested location"),
+            "date": query.get("date"),
+            "cuisine_type": query.get("cuisine_type"),
+            "restaurant_data": json.dumps(restaurant_summaries, indent=2, ensure_ascii=False)
+        })
+        
+        response = await llm.ainvoke(formatted_prompt.to_messages())
         final = json.loads(response.content)
         
         return {
@@ -377,11 +379,10 @@ async def format_final_response(state: AgentState) -> AgentState:
             "current_step": "error",
         }
 
-
 async def handle_error(state: AgentState) -> Dict:
     """Handle any errors that occurred during processing."""
     error_message = state.get("error", "An unknown error occurred")
-    print(f"handle_error: {error_message}")
+    print(f"Handling error: {error_message}")
 
     prompt = f"""
     The restaurant search encountered an error: {error_message}
@@ -398,13 +399,11 @@ async def handle_error(state: AgentState) -> Dict:
         "current_step": "error_handled",
     }
 
-
 # Define the graph
 def build_restaurant_agent():
     """Build and return the restaurant agent graph."""
     workflow = StateGraph(AgentState)
 
-    # Add nodes
     workflow.add_node("parse_query", parse_user_query)
     workflow.add_node("search_google_maps", search_google_maps)
     workflow.add_node("analyze", analyze_and_summarize)
@@ -413,7 +412,6 @@ def build_restaurant_agent():
     workflow.add_node("format_response", format_final_response)
     workflow.add_node("handle_error", handle_error)
 
-    # Add edges
     workflow.add_edge("parse_query", "search_google_maps")
     workflow.add_edge("search_google_maps", "analyze")
     workflow.add_edge("analyze", "pick_top_restaurants")
@@ -449,13 +447,10 @@ def build_restaurant_agent():
 
     workflow.add_edge("handle_error", END)
 
-    # Set the entry point
     workflow.set_entry_point("parse_query")
 
     return workflow.compile()
 
-
-# Example usage function
 async def get_restaurant_recommendations(user_query: str):
     """Run the restaurant agent with a user query."""
     agent = build_restaurant_agent()
@@ -478,10 +473,8 @@ async def get_restaurant_recommendations(user_query: str):
     else:
         raise RuntimeError("Unable to process your request. Please try again with more specific details.")
 
-
 class Input(BaseModel):
     prompt: Annotated[str, Field()]
-
 
 async def main() -> None:
     async with Actor:
@@ -492,7 +485,6 @@ async def main() -> None:
                 await Actor.push_data(item)
         except RuntimeError as ex:
             print(str(ex))
-
 
 if __name__ == "__main__":
     asyncio.run(main())
