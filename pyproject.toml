@@ -1,0 +1,26 @@
+[project]
+name = "dinefilter"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "langchain (>=0.3.19,<0.4.0)",
+    "langchain-openai (>=0.3.6,<0.4.0)",
+    "langgraph (>=0.2.74,<0.3.0)",
+    "langgraph-cli (>=0.1.73,<0.2.0)",
+    "apify (>=2.3.0,<3.0.0)",
+    "pydantic (>=2.10.6,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.9.6"
+
