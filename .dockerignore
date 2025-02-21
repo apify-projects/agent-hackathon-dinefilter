@@ -1,4 +1,5 @@
 .env
+mise.toml
 .venv
 storage
 node_modules
