@@ -1,7 +1,7 @@
-## What does Foodfindr do?
-Foodfindr is an Apify actor that scrapes Google Maps search results based on a user prompt, which may include various preferences and location. It then analyzes restaurant reviews, comparing the best and worst feedback, and summarizes key insights from the reviews. Additionally, Foodfindr scrapes restaurant menu websites for additional details and recommends the top three restaurants based on the reviews and user's criteria.
+## What does DinoFilter do?
+DinoFilter is an Apify actor that scrapes Google Maps search results based on a user prompt, which may include various preferences and location. It then analyzes restaurant reviews, comparing the best and worst feedback, and summarizes key insights from the reviews. Additionally, DinoFilter scrapes restaurant menu websites for additional details and recommends the top three restaurants based on the reviews and user's criteria.
 
-Foodfindr can scrape:
+DinoFilter can scrape:
 - Google Maps search results
 - Restaurant reviews, cuisine type, price etc.
 - Restaurant menu details
@@ -10,7 +10,7 @@ Foodfindr can scrape:
 ## Why scrape Google Maps?
 Google Maps is a widely used platform with a vast amount of restaurant information and reviews. By scraping Google Maps, users can gather valuable insights into the quality of restaurants and make informed dining decisions.
 
-Here are just some of the ways you could use the data from Foodfindr:
+Here are just some of the ways you could use the data from DinoFilter:
 - Finding the best restaurants in a specific location
 - Comparing reviews to make an informed choice
 - Analyzing menu offerings for different restaurants
@@ -18,21 +18,21 @@ Here are just some of the ways you could use the data from Foodfindr:
 
 If you would like more inspiration on how scraping Google Maps could benefit your business or organization, check out our [industry pages](https://apify.com/industries).
 
-## How to scrape Google Maps with Foodfindr
-It's easy to scrape Google Maps search results with Foodfindr. Just follow these simple steps and you'll have access to valuable restaurant data in no time.
+## How to scrape Google Maps with DinoFilter
+It's easy to scrape Google Maps search results with DinoFilter. Just follow these simple steps and you'll have access to valuable restaurant data in no time.
 
 1. Click on Try for free.
 2. Enter your search criteria, including preferences and location.
 3. Click on Run.
-4. Once Foodfindr has finished, preview or download your data from the Dataset tab.
+4. Once DinoFilter has finished, preview or download your data from the Dataset tab.
 
-## How much will it cost to scrape Google Maps with Foodfindr?
-Apify provides $5 free usage credits every month on the [Apify Free plan](https://apify.com/pricing). With Foodfindr, you can get more then 30 results per month for free!
+## How much will it cost to scrape Google Maps with DinoFilter?
+Apify provides $5 free usage credits every month on the [Apify Free plan](https://apify.com/pricing). With DinoFilter, you can get more then 30 results per month for free!
 
 If you need more data regularly from Google Maps, consider upgrading to an Apify subscription for example our [$49/month Starter plan](https://apify.com/pricing) or [Scale plan](https://apify.com/pricing).
 
 ## Results
-An example of the data produced by Foodfindr:
+An example of the data produced by DinoFilter:
 ```json
 {
   "name": "Mopa Döner",
