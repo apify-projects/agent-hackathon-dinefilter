@@ -5,8 +5,8 @@
     "buildTag": "latest",
     "environmentVariables": {"OPENAI_API_KEY": "@openaiToken"},
     "input": {
-        "title": "Foodfindr settings",
-        "description": "TODO",
+        "title": "Dinefilter settings",
+        "description": "Say what you want to eat, we'll find it",
         "type": "object",
         "schemaVersion": 1,
         "properties": {
