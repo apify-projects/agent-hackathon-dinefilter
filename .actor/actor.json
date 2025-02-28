@@ -17,61 +17,61 @@
                 "editor": "textfield",
                 "prefill": "Find me a place for lunch at Václavské náměstí"
             }
-        },
-        "storages": {
-            "dataset": {
-                "actorSpecification": 1,
-                "views": {
-                    "recommendations": {
-                        "title": "Recommendations",
-                        "transformation": {},
-                        "display": {
-                            "component": "table",
-                            "properties": {
-                                "name": {
-                                    "label": "Restaurant Name",
-                                    "format": "text"
-                                },
-                                "cuisine": {
-                                    "label": "Cuisine",
-                                    "format": "text"
-                                },
-                                "address": {
-                                    "label": "Restaurant Address",
-                                    "format": "text"
-                                },
-                                "map_url": {
-                                    "label": "Google Maps Link",
-                                    "format": "link"
-                                },
-                                "rating": {
-                                    "label": "Rating",
-                                    "format": "text"
-                                },
-                                "price_level": {
-                                    "label": "Price level",
-                                    "format": "text"
-                                },
-                                "menu_url": {
-                                    "label": "Menu Link",
-                                    "format": "link"
-                                },
-                                "web_url": {
-                                    "label": "Website Link",
-                                    "format": "link"
-                                },
-                                "review_summary": {
-                                    "label": "Review summary",
-                                    "format": "text"
-                                },
-                                "menu_highlights": {
-                                    "label": "Menu highlights",
-                                    "format": "text"
-                                },
-                                "location": {
-                                    "label": "Restaurant Longtitude and Latitude",
-                                    "format": "text"
-                                }
+        }
+    },
+    "storages": {
+        "dataset": {
+            "actorSpecification": 1,
+            "views": {
+                "recommendations": {
+                    "title": "Recommendations",
+                    "transformation": {},
+                    "display": {
+                        "component": "table",
+                        "properties": {
+                            "name": {
+                                "label": "Restaurant Name",
+                                "format": "text"
+                            },
+                            "cuisine": {
+                                "label": "Cuisine",
+                                "format": "text"
+                            },
+                            "address": {
+                                "label": "Restaurant Address",
+                                "format": "text"
+                            },
+                            "map_url": {
+                                "label": "Google Maps Link",
+                                "format": "link"
+                            },
+                            "rating": {
+                                "label": "Rating",
+                                "format": "text"
+                            },
+                            "price_level": {
+                                "label": "Price level",
+                                "format": "text"
+                            },
+                            "menu_url": {
+                                "label": "Menu Link",
+                                "format": "link"
+                            },
+                            "web_url": {
+                                "label": "Website Link",
+                                "format": "link"
+                            },
+                            "review_summary": {
+                                "label": "Review summary",
+                                "format": "text"
+                            },
+                            "menu_highlights": {
+                                "label": "Menu highlights",
+                                "format": "text"
+                            },
+                            "location": {
+                                "label": "Restaurant Longtitude and Latitude",
+                                "format": "text"
                             }
                         }
                     }
