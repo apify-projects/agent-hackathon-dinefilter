@@ -1,3 +1,5 @@
+[![Actor badge](https://apify.com/actor-badge?actor=ohlava/dinefilter)](https://apify.com/ohlava/dinefilter) [![GitHub Repo stars](https://img.shields.io/github/stars/apify-projects/agent-hackathon-dinefilter)](https://github.com/apify-projects/agent-hackathon-dinefilter)
+
 ## What does DinoFilter do?
 DinoFilter is an Apify actor that scrapes Google Maps search results based on a user prompt, which may include various preferences and location. It then analyzes restaurant reviews, comparing the best and worst feedback, and summarizes key insights from the reviews. Additionally, DinoFilter scrapes restaurant menu websites for additional details and recommends the top three restaurants based on the reviews and user's criteria.
 
