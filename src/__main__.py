@@ -321,9 +321,13 @@ async def format_final_response(state: AgentState) -> AgentState:
             reverse=True
         )
         
-        # Format restaurant data in a more concise way
         restaurant_summaries = []
         for restaurant in sorted_restaurants:
+            # Truncate menu/web content
+            menu_content = restaurant.get("menu_url_content") or restaurant.get("web_url_content", "")
+            if menu_content:
+                menu_content = menu_content[:1000] + "..." if len(menu_content) > 1000 else menu_content
+            
             summary = {
                 "name": restaurant.get("name", ""),
                 "address": restaurant.get("address", ""),
@@ -334,7 +338,7 @@ async def format_final_response(state: AgentState) -> AgentState:
                 "menu_url": restaurant.get("menu_url", ""),
                 "web_url": restaurant.get("web_url", ""),
                 "review_analysis": restaurant.get("review_analysis", "No review analysis available"),
-                "menu_content": restaurant.get("menu_url_content") or restaurant.get("web_url_content", "")
+                "menu_content": menu_content
             }
             restaurant_summaries.append(summary)
 
@@ -497,10 +501,15 @@ async def main() -> None:
         input = Input.model_validate(await Actor.get_input())
         try:
             response = await get_restaurant_recommendations(input.prompt)
-            for item in response["restaurants"]:
-                await Actor.push_data(item)
-        except RuntimeError as ex:
+            if isinstance(response, dict) and "restaurants" in response:
+                for item in response["restaurants"]:
+                    await Actor.push_data(item)
+            else:
+                print(f"Unexpected response format: {response}")
+                await Actor.push_data({"error": "Failed to retrieve restaurant recommendations"})
+        except Exception as ex:
             print(str(ex))
+            await Actor.push_data({"error": str(ex)})
 
 if __name__ == "__main__":
     asyncio.run(main())
