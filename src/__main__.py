@@ -13,9 +13,47 @@ from typing import Dict, List, Optional, TypedDict, Annotated, Union, Literal, A
 from dotenv import load_dotenv
 from apify import Actor
 from pydantic import BaseModel, Field
+import requests
 
 load_dotenv()
 
+class RagWebBrowserClient:
+    def __init__(self, api_token: str):
+        self.api_token = api_token
+        self.base_url = "https://rag-web-browser.apify.actor"
+    
+    def search(self, 
+               query: str, 
+               max_results: int = 3,
+               output_formats: str = "markdown",
+               request_timeout_secs: int = 30) -> List[dict]:
+        
+        params = {
+            'query': query,
+            'maxResults': max_results,
+            'outputFormats': output_formats,
+            'requestTimeoutSecs': request_timeout_secs
+        }
+        
+        headers = {
+            'Authorization': f'Bearer {self.api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        try:
+            response = requests.get(
+                f'{self.base_url}/search',
+                params=params,
+                headers=headers,
+                timeout=request_timeout_secs
+            )
+            response.raise_for_status()
+            return response.json()
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error making request: {e}")
+            return []
+        
 class Settings(BaseModel):
     openai_api_key: Annotated[str, Field(alias="OPENAI_API_KEY")]
 
@@ -138,66 +176,40 @@ async def search_google_maps(state: AgentState) -> AgentState:
 
 async def crawl_websites(state: AgentState) -> AgentState:
     print("Website crawling")
-    """Use RAG Web Browser to fetch information about the restaurant from their website."""
+    """Use RAG Web Browser in standby mode to fetch information about the restaurants."""
     try:
         if not state.get("top_matches"):
             return {
                 **state,
-                "error": "Not able to scrape restaurants website",
+                "error": "No restaurants to crawl websites for",
                 "current_step": "error",
             }
 
+        rag_client = RagWebBrowserClient(os.environ["APIFY_TOKEN"])
         updated_restaurants = []
-        urls_to_crawl = [*chain(
-            (item.get("menu_url") for item in state["top_matches"] if item.get("menu_url")),
-            (item.get("web_url") for item in state["top_matches"] if item.get("web_url"))
-        )]
 
-        if not urls_to_crawl:
-            return {
-                **state,
-                "current_step": "content_crawl_completed (no urls)"
-            }
+        for restaurant in state["top_matches"]:
+            restaurant_copy = {**restaurant}
+            updated_restaurants.append(restaurant_copy)
 
-        # Create a mapping to track which URLs belong to which restaurant
-        url_to_restaurant = {}
-        for item in state["top_matches"]:
-            if menu_url := item.get("menu_url"):
-                url_to_restaurant[menu_url] = {"item": item, "type": "menu"}
-            if web_url := item.get("web_url"):
-                url_to_restaurant[web_url] = {"item": item, "type": "web"}
-
-        rag_results = {}
+            url_to_crawl = restaurant.get("menu_url") or restaurant.get("web_url")
+            if url_to_crawl:
+                try:
+                    results = rag_client.search(
+                        query=url_to_crawl,
+                        max_results=1,
+                        output_formats="markdown",
+                        request_timeout_secs=45,
+                        dynamic_content_wait_secs=10
+                    )
+                    if results:
+                        if restaurant.get("menu_url"):
+                            restaurant_copy["menu_url_content"] = results[0].get("markdown", "")
+                        else:
+                            restaurant_copy["web_url_content"] = results[0].get("markdown", "")
+                except Exception as e:
+                    print(f"Error crawling URL {url_to_crawl}: {str(e)}")
         
-        for url in urls_to_crawl:
-            try:
-                run = await Actor.call(
-                    RAG_WEB_BROWSER, 
-                    run_input={
-                        "query": url,  # Specific URL to crawl
-                        "maxPageCount": 1
-                    }
-                )
-                
-                items = (await Actor.apify_client.dataset(run.default_dataset_id).list_items()).items
-                if items:
-                    rag_results[url] = items[0].get("markdown", "")
-            except Exception as e:
-                print(f"Error crawling {url}: {str(e)}")
-                continue
-        
-        for item in state["top_matches"]:
-            item_copy = {**item}
-            updated_restaurants.append(item_copy)
-
-            if menu_url := item.get("menu_url"):
-                if menu_url in rag_results:
-                    item_copy["menu_url_content"] = rag_results[menu_url]
-
-            if web_url := item.get("web_url"):
-                if web_url in rag_results:
-                    item_copy["web_url_content"] = rag_results[web_url]
-
         return {
             **state,
             "top_matches": updated_restaurants,
