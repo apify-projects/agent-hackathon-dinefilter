@@ -168,7 +168,10 @@ async def search_google_maps(state: AgentState) -> AgentState:
                 "top_negative_reviews": [r.get("text", "") for r in item.get("reviews", []) if r.get("stars", 0) <= 2][:3],
             }
             restaurants.append(rest_data)
-
+        
+        if restaurants:
+            await Actor.charge({"eventName": "google_maps_search"})
+            
         return {**state, "restaurants": restaurants, "current_step": "google_maps_completed"}
 
     except Exception as e:
@@ -203,6 +206,9 @@ async def crawl_websites(state: AgentState) -> AgentState:
                         dynamic_content_wait_secs=10
                     )
                     if results:
+                        
+                        await Actor.charge({"eventName": "website_crawl"})
+                        
                         if restaurant.get("menu_url"):
                             restaurant_copy["menu_url_content"] = results[0].get("markdown", "")
                         else:
@@ -260,6 +266,9 @@ async def analyze_and_summarize(state: AgentState) -> AgentState:
             restaurant["review_analysis"] = response.content
             analyzed_restaurants.append(restaurant)
 
+        if analyzed_restaurants:
+            await Actor.charge({"eventName": "restaurant_analysis"})
+            
         return {
             **state,
             "restaurants": analyzed_restaurants,
@@ -398,7 +407,9 @@ async def format_final_response(state: AgentState) -> AgentState:
         
         response = await llm.ainvoke(formatted_prompt.to_messages())
         final = json.loads(response.content)
-        
+        if final.get("restaurants"):
+            await Actor.charge({"eventName": "successful_completion"})
+            
         return {
             **state,
             "final_response": final,
@@ -485,6 +496,9 @@ def build_restaurant_agent():
 
 async def get_restaurant_recommendations(user_query: str):
     """Run the restaurant agent with a user query."""
+    
+    await Actor.charge({"eventName": "init"})
+    
     agent = build_restaurant_agent()
 
     initial_state = {
