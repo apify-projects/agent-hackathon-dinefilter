@@ -54,7 +54,7 @@ class AgentState(TypedDict):
 
 # APIFY actors
 GOOGLE_MAPS_SCRAPER = "compass/crawler-google-places"
-WCC = "apify/website-content-crawler"
+RAG_WEB_BROWSER = "apify/rag-web-browser"
 
 # LLM setup
 llm = ChatOpenAI(model="gpt-4", temperature=0, api_key=settings.openai_api_key)
@@ -138,7 +138,7 @@ async def search_google_maps(state: AgentState) -> AgentState:
 
 async def crawl_websites(state: AgentState) -> AgentState:
     print("Website crawling")
-    """Use website content crawler to fetch information about the restaurant from their website."""
+    """Use RAG Web Browser to fetch information about the restaurant from their website."""
     try:
         if not state.get("top_matches"):
             return {
@@ -148,39 +148,55 @@ async def crawl_websites(state: AgentState) -> AgentState:
             }
 
         updated_restaurants = []
-        start_urls = [*chain(
-            ({"url": url} for item in state["top_matches"] if (url := item.get("menu_url"))),
-            ({"url": url} for item in state["top_matches"] if (url := item.get("web_url")))
+        urls_to_crawl = [*chain(
+            (item.get("menu_url") for item in state["top_matches"] if item.get("menu_url")),
+            (item.get("web_url") for item in state["top_matches"] if item.get("web_url"))
         )]
 
-        if not start_urls:
+        if not urls_to_crawl:
             return {
                 **state,
                 "current_step": "content_crawl_completed (no urls)"
             }
 
-        run = await Actor.call(
-            WCC, 
-            run_input={
-                "startUrls": start_urls, 
-                "maxCrawlDepth": 0,
-            }
-        )
-        wcc_output = {item["url"]: item for item in (
-            await Actor.apify_client.dataset(run.default_dataset_id).list_items()
-        ).items}
+        # Create a mapping to track which URLs belong to which restaurant
+        url_to_restaurant = {}
+        for item in state["top_matches"]:
+            if menu_url := item.get("menu_url"):
+                url_to_restaurant[menu_url] = {"item": item, "type": "menu"}
+            if web_url := item.get("web_url"):
+                url_to_restaurant[web_url] = {"item": item, "type": "web"}
+
+        rag_results = {}
+        
+        for url in urls_to_crawl:
+            try:
+                run = await Actor.call(
+                    RAG_WEB_BROWSER, 
+                    run_input={
+                        "query": url,  # Specific URL to crawl
+                        "maxPageCount": 1
+                    }
+                )
+                
+                items = (await Actor.apify_client.dataset(run.default_dataset_id).list_items()).items
+                if items:
+                    rag_results[url] = items[0].get("markdown", "")
+            except Exception as e:
+                print(f"Error crawling {url}: {str(e)}")
+                continue
         
         for item in state["top_matches"]:
             item_copy = {**item}
             updated_restaurants.append(item_copy)
 
-            output_item = wcc_output.get(item["menu_url"])
-            if output_item is not None:
-                item_copy["menu_url_content"] = output_item["text"]
+            if menu_url := item.get("menu_url"):
+                if menu_url in rag_results:
+                    item_copy["menu_url_content"] = rag_results[menu_url]
 
-            output_item = wcc_output.get(item["web_url"])
-            if output_item is not None:
-                item_copy["web_url_content"] = output_item["text"]
+            if web_url := item.get("web_url"):
+                if web_url in rag_results:
+                    item_copy["web_url_content"] = rag_results[web_url]
 
         return {
             **state,
@@ -190,7 +206,7 @@ async def crawl_websites(state: AgentState) -> AgentState:
     except Exception as e:
         return {
             **state,
-            "error": f"Error in WCC crawl: {str(e)}",
+            "error": f"Error in RAG Web Browser crawl: {str(e)}",
             "current_step": "error",
         }
 
